@@ -36,6 +36,7 @@ public class GUI extends JFrame implements ActionListener{
 		return graph;
 	}
 	
+	
 	/**グラフのデータをcsvから取得する*/
 	public ArrayList<Node> chooseGraphData() {
 		ArrayList<Node> graph = new ArrayList<Node>();

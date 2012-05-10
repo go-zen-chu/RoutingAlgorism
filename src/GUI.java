@@ -27,7 +27,17 @@ public class GUI extends JFrame implements ActionListener{
 	}
 	/*-----------------------------------------------------*/
 	/**グラフのデータをcsvから取得する*/
-	public ArrayList<Node> getGraphData() {
+	public ArrayList<Node> getGraphData(String fileName) {
+		ArrayList<Node> graph = new ArrayList<Node>();
+		// ファイルの選択ダイアログの起動
+		File csvFile = new File("/Users/masudaakira/Documents/" + fileName);
+		ArrayList<int[]> graphData = getGraphDataFromCsv(csvFile);
+		makeGraphFromGraphData(graph, graphData);
+		return graph;
+	}
+	
+	/**グラフのデータをcsvから取得する*/
+	public ArrayList<Node> chooseGraphData() {
 		ArrayList<Node> graph = new ArrayList<Node>();
 		// ファイルの選択ダイアログの起動
 		File csvFile = showFileChooser();
@@ -85,7 +95,7 @@ public class GUI extends JFrame implements ActionListener{
 	         			 intArray[i] = csvData.get(i)[maxRowNumber-newRowNumber];
 	         		 }
 	         		 for(int i = 0; i < strArray.length; i++){
-	         			  intArray[i+maxRowNumber-newRowNumber] = Integer.parseInt(strArray[i]);
+	         			  intArray[i + maxRowNumber - newRowNumber] = Integer.parseInt(strArray[i]);
 	         		 }
 	         		 csvData.add(intArray);
 	         	 }else if(newRowNumber == oldRowNumber){
@@ -97,14 +107,15 @@ public class GUI extends JFrame implements ActionListener{
 	         		 csvData.add(intArray);
 	         	 }else {
 	         		Exception e = new Exception(
-	         				"入力したファイルの" + columnCount + "行目：：グラフの入力に間違いがあります。");
+	         				"入力したファイルの" + columnCount 
+	         				+ "行目：：グラフの入力に間違いがあります。");
 	 	         	showErrorDialog(e);
 	 	         	return null;
 					}
 	          }
 	          oldRowNumber = newRowNumber;
 	      }
-			System.out.println("行数:" + columnCount + " 列数:" + maxRowNumber + "¥n");
+			//System.out.println("行数:" + columnCount + " 列数:" + maxRowNumber);
 			// 正方行列でないとおかしいので、行数=列数かどうかを調べる
 			if(columnCount != maxRowNumber){
 				Exception e = new Exception("入力したファイル行数か列数に問題があります");
@@ -143,6 +154,32 @@ public class GUI extends JFrame implements ActionListener{
 	}
 
 	/*-----------------------------------------------------*/
+	/**行列表示ダイアログ*/
+	public void showMatrixDialog(ArrayList<Node> graph) {
+		JFrame selectDialog = new JFrame("実行の結果");
+		selectDialog.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		selectDialog.setSize(400, 400);
+		selectDialog.setLayout(new GridLayout(1,1));
+		
+		int nodeNum = graph.size();
+		String viewStr = "<html>Nodes :";
+		for(int i = 0; i < nodeNum; i++){
+			viewStr += "  " + String.valueOf(i) + "|";
+		}
+		viewStr += "<br>";
+		for (int i = 0; i < nodeNum; i++) {
+			viewStr += "Node " + String.valueOf(i) + ":";
+			for (int j = 0; j < nodeNum; j++) {
+				viewStr += "  " + String.valueOf(graph.get(i).mLinkList.get(j).mWeight) + "|";
+			}
+			viewStr += "<br>";
+		}
+		JLabel nodeLabel = new JLabel(viewStr);
+		selectDialog.add(nodeLabel);
+		selectDialog.setVisible(true);
+	}
+	/*-----------------------------------------------------*/	
+	/**メソッド選択ダイアログ*/
 	public void selectMethod() {
 		JFrame selectDialog = new JFrame("実行の選択");
 		selectDialog.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -165,6 +202,7 @@ public class GUI extends JFrame implements ActionListener{
 		selectDialog.setVisible(true);
 	}
 	/*-----------------------------------------------------*/
+	/**結果表示ダイアログ*/
 	public void showResultDialog(Route route) {
 		JFrame selectDialog = new JFrame("実行の結果");
 		selectDialog.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -172,14 +210,14 @@ public class GUI extends JFrame implements ActionListener{
 		selectDialog.setLocationRelativeTo(null);
 		selectDialog.setLayout(new GridLayout(8,1));
 		
-		JLabel nodeLabel = new JLabel("<html>Start Node ID : " + route.fromNodeID + "<br>"
-											+ "Goal Node ID : " + route.toNodeID + "<br>");
-		String resultStr = String.valueOf("    " + route.fromNodeID);
-		for(UndirectoryLink l: route.linkList){
-			resultStr += " ->(" + String.valueOf(l.weight) + ")-> " + String.valueOf(l.toNodeID);
+		JLabel nodeLabel = new JLabel("<html>Start Node ID : " + route.mFromNodeID + "<br>"
+											+ "Goal Node ID : " + route.mToNodeID + "<br>");
+		String resultStr = String.valueOf("    " + route.mFromNodeID);
+		for(UndirectoryLink l: route.mLinkList){
+			resultStr += " ->(" + String.valueOf(l.mWeight) + ")-> " + String.valueOf(l.mToNodeID);
 		}
 		JLabel resultLabel = new JLabel("<html>" + resultStr + "<br>" 
-												+ " Total Cost : " + route.weight);
+												+ " Cost : " + route.mWeight);
 		selectDialog.add(nodeLabel);
 		selectDialog.add(resultLabel);
 		selectDialog.setVisible(true);
@@ -191,12 +229,12 @@ public class GUI extends JFrame implements ActionListener{
 		String actionCommand = e.getActionCommand();
 		if(actionCommand.equals("Djikstra")){
 			// ダイクストラ法
-			Route resultRoute = MainProcess.djikstra();
+			Route resultRoute = Main.djikstra();
 			// 結果を表示
 			showResultDialog(resultRoute);
 		}else if (actionCommand.equals("ShortestMaxFlowPath")) {
 			// 最短最大路を求める
-			Route resultRoute = MainProcess.shortestMaxFlowPath();
+			Route resultRoute = Main.shortestMaxFlowPath();
 			showResultDialog(resultRoute);
 		}
 	}

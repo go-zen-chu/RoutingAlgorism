@@ -1,8 +1,9 @@
 import java.util.ArrayList;
 
 public class Route extends UndirectoryLink implements Cloneable {
-	ArrayList<UndirectoryLink> mLinkList = null;
-	boolean mIsFlowed = false;
+	public ArrayList<UndirectoryLink> mLinkList = null;
+	public boolean mIsFlowed = false;
+	public boolean mIsPassed = false;
 	/**調べ終わったIDを保存する.最大最短路で用いる*/
 	private ArrayList<Integer> mCheckedNodeIDs = null;
 	
@@ -25,6 +26,8 @@ public class Route extends UndirectoryLink implements Cloneable {
 	public Route(int fromNodeID, int toNodeID, int weight, boolean isFlowed) {
 		super(fromNodeID, toNodeID, weight);
 		mIsFlowed = isFlowed;
+		mCheckedNodeIDs = new ArrayList<Integer>();
+		mCheckedNodeIDs.add(fromNodeID);
 	}
 	
 	public Route(int fromNodeID, int toNodeID, int weight, 
@@ -52,7 +55,10 @@ public class Route extends UndirectoryLink implements Cloneable {
 		@SuppressWarnings("unchecked")
 		ArrayList<UndirectoryLink> linkList 
 			= (ArrayList<UndirectoryLink>) mLinkList.clone();
-		Route newRoute = new Route(mFromNodeID, mToNodeID, mWeight, linkList);
+		@SuppressWarnings("unchecked")
+		ArrayList<Integer> checkedList 
+			= (ArrayList<Integer>) mCheckedNodeIDs.clone();
+		Route newRoute = new Route(mFromNodeID, mToNodeID, mWeight, linkList, checkedList);
 		newRoute.forwardRoute(link);
 		// 次のノードはリンク先に等しい
 		// コストは前ルートのコストにリンクのコストを足したもの

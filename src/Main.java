@@ -1,5 +1,8 @@
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -10,15 +13,15 @@ import java.util.Random;
 
 public class Main {
 
-	/**改行コード*/
-	public static final String NEWLINE = System.getProperty("line.separator");
 	/**テストした回数*/
 	private static final int TEST_TIME = 10000;
 	/**通信に用いる回線数*/
-	private static int n = 20;
+	private static final int n = 100;
 	
-	private static final String COST_GRAPH = "topology1_cost.csv";
-	private static final String FLOW_GRAPH = "topology1_flow.csv";
+	private static final String COST_GRAPH = "topology3_cost.csv";
+	private static final String FLOW_GRAPH = "topology3_flow.csv";
+	/**改行コード*/
+	public static final String NEWLINE = System.getProperty("line.separator");
 	
 	private static ArrayList<Node> mCostGraph = null;
 	private static ArrayList<Node> mFlowGraph = null;
@@ -32,15 +35,13 @@ public class Main {
 	/** (ShortestMaxFlowPath)最大路を記録したリスト（ただし、最小路かはわからない） */
 	private static ArrayList<Route> mMaxFlowRoutes = null;
 	
-	
 	public static void main(String[] args) {
-		GUI gui = new GUI();
 		// グラフの入力と作成
-		mCostGraph = gui.getGraphData(COST_GRAPH);
-		mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+		mCostGraph = getGraphData(COST_GRAPH);
+		mFlowGraph = getGraphData(FLOW_GRAPH);
 		// 入力したグラフの表示
-		// gui.showMatrixDialog(mCostGraph);
-		// gui.showMatrixDialog(mFlowGraph);
+		// showMatrixDialog(mCostGraph);
+		// showMatrixDialog(mFlowGraph);
 		mNodeNum = mCostGraph.size();
 		
 		// ランダムなノードを作成
@@ -51,29 +52,27 @@ public class Main {
 			startNodeID = r.nextInt(mNodeNum);
 			goalNodeID = r.nextInt(mNodeNum);
 		}
-		startNodeID = 8; goalNodeID = 9;
 		// スタートとゴールノード
 		mStartNode = mCostGraph.get(startNodeID);
 		mGoalNode = mCostGraph.get(goalNodeID);
-		System.out.println("start " + startNodeID + " goal " + goalNodeID);
 		
 		String testResultString = "スタートノードID," + startNodeID + ","
 										+ "ゴールノードID," + goalNodeID + ","
 										+ "通信する量," + n + ","
 										+ "テストが行われた回数," + TEST_TIME + NEWLINE;
-//		testResultString += testMinHopFixedPathDinamicNodes(r);
-//		testResultString += testMaxFlowFixedPathDinamicNodes(r);
-//		testResultString += testMinHopDinamicPathDinamicNodes(r);
-//		testResultString += testMaxFlowDinamicPathDinamicNodes(r);
+		testResultString += testMinHopFixedPathDinamicNodes(r);
+		testResultString += testMaxFlowFixedPathDinamicNodes(r);
+		testResultString += testMinHopDinamicPathDinamicNodes(r);
+		testResultString += testMaxFlowDinamicPathDinamicNodes(r);
 //		testResultString += testMinHopFixedPathFixedNodes();
 //		testResultString += testMaxFlowFixedPathFixedNodes();
-		testResultString += testMinHopDinamicPathFixedNodes();
+//		testResultString += testMinHopDinamicPathFixedNodes();
 //		testResultString += testMaxFlowDinamicPathFixedNodes();
 		
 		exportAsCsvfile("/Users/masudaakira/Desktop/result.csv", testResultString);
 		
 		// モードを尋ねるダイアログ
-		// gui.selectMethod();
+		// selectMethod();
 		System.exit(0);
 	}
 	
@@ -97,10 +96,9 @@ public class Main {
 					increaseFlow(route);
 				}
 				Route nextRoute  = djikstra();
+				decreaseFlow(nextRoute);
 				if(nextRoute.mIsFlowed){
 					flowedTime++;
-				}else{
-					decreaseFlow(nextRoute);
 				}
 				communicatingQueue.add(nextRoute);
 				
@@ -114,9 +112,8 @@ public class Main {
 				mGoalNode = mCostGraph.get(goalNodeID);
 			}
 			testResultString += j + "," + (((double)flowedTime)/TEST_TIME) + NEWLINE;
-			GUI gui = new GUI();
-			mCostGraph = gui.getGraphData(COST_GRAPH);
-			mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+			// コストグラフには変化を与えないので、初期値のまま
+			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
 	}
@@ -139,16 +136,16 @@ public class Main {
 					increaseFlow(route);
 				}
 				
-				ArrayList<Node> tmpCostGraph = mCostGraph;
-				GUI gui = new GUI();
-				mCostGraph = gui.getGraphData(COST_GRAPH);
+				ArrayList<Node> tmpFlowGraph = mFlowGraph;
+				mFlowGraph = getGraphData(FLOW_GRAPH);
 				// 固定の場合、元々フローが最大だったものを選ぶ
 				Route nextRoute = shortestMaxFlowPath();
-				mCostGraph = tmpCostGraph;
+				mFlowGraph = tmpFlowGraph;
 				if(nextRoute.mIsFlowed){
 					flowedTime++;
 				}else{
 					decreaseFlow(nextRoute);
+					if(nextRoute.mIsFlowed) flowedTime++;
 				}
 				communicatingQueue.add(nextRoute);
 				
@@ -162,8 +159,7 @@ public class Main {
 				mGoalNode = mCostGraph.get(goalNodeID);
 			}
 			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
-			GUI gui = new GUI();
-			mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
 	}
@@ -202,13 +198,13 @@ public class Main {
 					flowedTime++;
 				}else{
 					decreaseFlowCostChange(nextRoute);
+					if(nextRoute.mIsFlowed) flowedTime++;
 				}
 				communicatingQueue.add(nextRoute);
 			}
 			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
-			GUI gui = new GUI();
-			mCostGraph = gui.getGraphData(COST_GRAPH);
-			mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+			mCostGraph = getGraphData(COST_GRAPH);
+			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
 	}
@@ -247,12 +243,13 @@ public class Main {
 					flowedTime++;
 				}else{
 					decreaseFlow(nextRoute);
+					if(nextRoute.mIsFlowed) flowedTime++;
 				}
 				communicatingQueue.add(nextRoute);
 			}
 			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
-			GUI gui = new GUI();
-			mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+
+			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
 	}
@@ -287,9 +284,9 @@ public class Main {
 				communicatingQueue.add(nextRoute);
 			}
 			testResultString += j + "," + (((double)flowedTime)/TEST_TIME) + NEWLINE;
-			GUI gui = new GUI();
-			mCostGraph = gui.getGraphData(COST_GRAPH);
-			mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+
+			mCostGraph = getGraphData(COST_GRAPH);
+			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
 	}
@@ -322,8 +319,8 @@ public class Main {
 				communicatingQueue.add(nextRoute);
 			}
 			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
-			GUI gui = new GUI();
-			mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+
+			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
 	}
@@ -348,22 +345,19 @@ public class Main {
 					// 通信を終了、回線を回復
 					increaseFlowCostChange(route);
 				}
-				if(j == 15 && i == 199){
-					System.out.print(true);
-				}
 				// 毎回ルートを確認し、
 				nextRoute = djikstra();
 				if(nextRoute.mIsFlowed){
 					flowedTime++;
 				}else{
 					decreaseFlowCostChange(nextRoute);
+					if(nextRoute.mIsFlowed) flowedTime++;
 				}
 				communicatingQueue.add(nextRoute);
 			}
 			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
-			GUI gui = new GUI();
-			mCostGraph = gui.getGraphData(COST_GRAPH);
-			mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+			mCostGraph = getGraphData(COST_GRAPH);
+			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
 	}
@@ -393,12 +387,12 @@ public class Main {
 					flowedTime++;
 				}else{
 					decreaseFlow(nextRoute);
+					if(nextRoute.mIsFlowed) flowedTime++;
 				}
 				communicatingQueue.add(nextRoute);
 			}
 			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
-			GUI gui = new GUI();
-			mFlowGraph = gui.getGraphData(FLOW_GRAPH);
+			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
 	}
@@ -490,8 +484,9 @@ public class Main {
 	/** ダイクストラ法 */
 	public static Route djikstra() {
 		// 初期化がうまくいっていない場合の処理
-		if (mCostGraph == null || mStartNode == null || mGoalNode == null)
+		if (mCostGraph == null || mStartNode == null || mGoalNode == null){
 			return null;
+		}
 		mRouteQueue = new ArrayList<Route>();
 		Route startRoute = new Route(mStartNode.mNodeID, mStartNode.mNodeID, 0);
 		// あるノードに対して、コストが最小のルートのみを集めたリスト
@@ -506,7 +501,7 @@ public class Main {
 		ArrayList<Route> newRoutes = new ArrayList<Route>();
 		for (UndirectoryLink l : node.mLinkList) {
 			// コストが0でない（つながっている）リンクを元に新しいルートを作成する
-			// また、ルートのスタートノードへ戻らないようにする
+			// また、通ったノードへ戻らないようにする
 			if (!(l.mWeight == 0) && !route.isPassed(l)) {
 				newRoutes.add(route.makeNewRoute(l));
 			}
@@ -520,7 +515,7 @@ public class Main {
 						if (stackedRoute.mToNodeID == newRoute.mToNodeID) {
 							if (stackedRoute.mWeight < newRoute.mWeight) {
 								// 新しいルートのうち、コストが既存のものよりも大きいものは抜き取っておく
-								newRoute = null;
+								newRoute.mIsPassed = true;
 								break;
 							}
 						}
@@ -533,7 +528,7 @@ public class Main {
 		// TODO この方法の問題点は、既存のルートで効率の悪いものを消せないということ
 		// ただし、最後の方に移すことは出来る
 		for (Route newRoute : newRoutes) {
-			if (newRoute != null) {	// nullのものは、既存のルートよりもコストが掛かる
+			if (!newRoute.mIsPassed) {	// すでに通っているものは、既存のルートよりもコストが掛かる
 				mRouteQueue.add(newRoute);
 			}
 		}
@@ -663,7 +658,103 @@ public class Main {
 			return o1.mLinkList.size() - o2.mLinkList.size();
 		}
 	}
-	/*-----------------------------------------------------*/
+	/*--------------------ファイルの入出--------------------------*/
+	
+	/**グラフのデータをcsvから取得する*/
+	public static ArrayList<Node> getGraphData(String fileName) {
+		ArrayList<Node> graph = new ArrayList<Node>();
+		// ファイルの選択ダイアログの起動
+		File csvFile = new File("/Users/masudaakira/Documents/" + fileName);
+		ArrayList<int[]> graphData = getGraphDataFromCsv(csvFile);
+		makeGraphFromGraphData(graph, graphData);
+		return graph;
+	}
+	/**入力されたグラフが正しい場合、ArrayListが返され、正しくない場合はnullを返す*/
+	public static ArrayList<int[]> getGraphDataFromCsv(File csvFile) {
+		ArrayList<int[]> csvData = new ArrayList<int[]>();
+		BufferedReader bufferedReader = null;
+		String lineStr = null;
+		int columnCount = 0;
+		int oldRowNumber = 0;
+		int newRowNumber = 0;
+		int maxRowNumber = 0;
+		try {
+			bufferedReader = new BufferedReader(new FileReader(csvFile));
+			while(null != (lineStr = bufferedReader.readLine())){
+				 // 改行のみの行は行数としてカウントしない
+	          if(!lineStr.equals("¥n")){
+	         	 // 改行だけではない行はカウントする
+	         	 columnCount++;
+	         	 // 渡された行列がグラフ作成するにあたい、正しいかどうか確認する
+	         	 String[] strArray = lineStr.split(","); // csvファイルの行を ,で分割する	  
+	         	 newRowNumber = strArray.length;
+	         	// 最初の列数が最大列数と同じになる筈
+         		 if(csvData.isEmpty()) {
+         			 maxRowNumber = newRowNumber;
+         			 oldRowNumber = newRowNumber;
+         		 }
+	         	 // 行列の形が正しいかどうか
+	         	 if(newRowNumber == oldRowNumber - 1){
+	         		 // 入力方法簡素化ver （与えられたデータが実対称であると仮定して格納）
+	         		 int[] intArray = new int[maxRowNumber];
+	         		 for(int i = 0; i < maxRowNumber - newRowNumber; i++){
+	         			 // いびつな形をした行列を正方行列に直す
+	         			 intArray[i] = csvData.get(i)[maxRowNumber-newRowNumber];
+	         		 }
+	         		 for(int i = 0; i < strArray.length; i++){
+	         			  intArray[i + maxRowNumber - newRowNumber] = Integer.parseInt(strArray[i]);
+	         		 }
+	         		 csvData.add(intArray);
+	         	 }else if(newRowNumber == oldRowNumber){
+	         		 // グラフの入力行列が正方行列だった場合
+	         		 int[] intArray = new int[maxRowNumber];
+	         		 for(int i = 0; i < maxRowNumber; i++){
+	         			  intArray[i] = Integer.parseInt(strArray[i]);
+	         		 }
+	         		 csvData.add(intArray);
+	         	 }else {
+	         		 System.out.println("入力したファイルの" + columnCount 
+		         				+ "行目：：グラフの入力に間違いがあります。");
+	 	         	return null;
+					}
+	          }
+	          oldRowNumber = newRowNumber;
+	      }
+			//System.out.println("行数:" + columnCount + " 列数:" + maxRowNumber);
+			// 正方行列でないとおかしいので、行数=列数かどうかを調べる
+			if(columnCount != maxRowNumber){
+				System.out.println("入力したファイル行数か列数に問題があります");
+	         return null;
+			}
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}finally{
+			try {
+				if(bufferedReader != null) bufferedReader.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		return csvData;
+	}
+	/**ArrayListからグラフ（ノードやリンクなど）を作成する*/
+	public static void makeGraphFromGraphData(ArrayList<Node> graph,
+												ArrayList<int[]> graphData) {
+		int columnNum = graphData.size();
+		for(int i = 0; i < columnNum; i++){
+			// リンクを格納するlist
+			ArrayList<UndirectoryLink> linkList = new ArrayList<UndirectoryLink>();
+			int[] columnArray = graphData.get(i);
+			for(int j = 0; j < columnNum; j++){
+				UndirectoryLink l = new UndirectoryLink(i, j, columnArray[j]);
+				linkList.add(l);
+			}
+			Node n = new Node( i, linkList);
+			graph.add(n);
+		}
+	}
 	
 	/**String型をcsvファイルとして指定の場所に保存する*/
 	private static void exportAsCsvfile(String fileName, String data) {

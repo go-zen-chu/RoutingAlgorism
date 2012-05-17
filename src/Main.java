@@ -13,15 +13,22 @@ import java.util.Random;
 
 public class Main {
 
+	// コストグラフへの絶対パス
+	private static final String COST_GRAPH 
+		= "/Users/masudaakira/Desktop/report/topology3_cost.csv";
+	// フローグラフへの絶対パス
+	private static final String FLOW_GRAPH 
+		= "/Users/masudaakira/Desktop/report/topology4_flow.csv";
+	// 結果を保存する場所への絶対パス
+	private static final String SAVE_PATH 
+		= "/Users/masudaakira/Desktop/result.csv";
+	/**改行コード*/
+	public static final String NEWLINE = System.getProperty("line.separator");
+	
 	/**テストした回数*/
 	private static final int TEST_TIME = 10000;
 	/**通信に用いる回線数*/
 	private static final int n = 100;
-	
-	private static final String COST_GRAPH = "topology3_cost.csv";
-	private static final String FLOW_GRAPH = "topology3_flow.csv";
-	/**改行コード*/
-	public static final String NEWLINE = System.getProperty("line.separator");
 	
 	private static ArrayList<Node> mCostGraph = null;
 	private static ArrayList<Node> mFlowGraph = null;
@@ -39,10 +46,12 @@ public class Main {
 		// グラフの入力と作成
 		mCostGraph = getGraphData(COST_GRAPH);
 		mFlowGraph = getGraphData(FLOW_GRAPH);
+		
 		// 入力したグラフの表示
-		// showMatrixDialog(mCostGraph);
-		// showMatrixDialog(mFlowGraph);
+//		GUI.showMatrixDialog(mCostGraph, "コストグラフ");
+		GUI.showMatrixDialog(mFlowGraph, "フローグラフ");
 		mNodeNum = mCostGraph.size();
+		
 		
 		// ランダムなノードを作成
 		long seed = System.currentTimeMillis();
@@ -52,28 +61,202 @@ public class Main {
 			startNodeID = r.nextInt(mNodeNum);
 			goalNodeID = r.nextInt(mNodeNum);
 		}
+		
 		// スタートとゴールノード
 		mStartNode = mCostGraph.get(startNodeID);
 		mGoalNode = mCostGraph.get(goalNodeID);
+		// 実行動作確認
+//		Route djikstraRoute = djikstra();
+//		Route showtestMaxRoute = shortestMaxFlowPath();
+//		GUI.showCostResultDialog(djikstraRoute);
+//		GUI.showFlowResultDialog(showtestMaxRoute);
 		
-		String testResultString = "スタートノードID," + startNodeID + ","
-										+ "ゴールノードID," + goalNodeID + ","
-										+ "通信する量," + n + ","
+		String testResultString = "通信する回線数," + n + ","
 										+ "テストが行われた回数," + TEST_TIME + NEWLINE;
 		testResultString += testMinHopFixedPathDinamicNodes(r);
 		testResultString += testMaxFlowFixedPathDinamicNodes(r);
 		testResultString += testMinHopDinamicPathDinamicNodes(r);
 		testResultString += testMaxFlowDinamicPathDinamicNodes(r);
+		// スタートノードとゴールノードが固定のテスト
 //		testResultString += testMinHopFixedPathFixedNodes();
 //		testResultString += testMaxFlowFixedPathFixedNodes();
 //		testResultString += testMinHopDinamicPathFixedNodes();
 //		testResultString += testMaxFlowDinamicPathFixedNodes();
 		
-		exportAsCsvfile("/Users/masudaakira/Desktop/result.csv", testResultString);
-		
-		// モードを尋ねるダイアログ
-		// selectMethod();
+		exportAsCsvfile(SAVE_PATH, testResultString);
 		System.exit(0);
+	}
+
+	/*-----------------------------------------------------*/
+	/** ダイクストラ法 */
+	public static Route djikstra() {
+		mRouteQueue = new ArrayList<Route>();
+		Route startRoute = new Route(mStartNode.mNodeID, mStartNode.mNodeID, 0);
+		// あるノードに対して、コストが最小のルートのみを集めたリスト
+		mCostLeastRoutes = new ArrayList<Route>();
+		return searchRoute(startRoute, mGoalNode);
+	}
+	/**深さ優先探索*/
+	public static Route searchRoute(Route route, Node goalNode) {
+		// 検索するノード
+		Node nextNode = mCostGraph.get(route.mToNodeID);
+		// ノードから派生する新しいルートを保存
+		ArrayList<Route> newRoutes = new ArrayList<Route>();
+		for (UndirectoryLink l : nextNode.mLinkList) {
+			// コストが0でない（つながっている）リンクを元に新しいルートを作成する
+			// また、通ったノードへ戻らないようにする
+			if (!(l.mWeight == 0) && !route.isPassed(l)) {
+				newRoutes.add(route.makeNewRoute(l));
+			}
+		}
+		// ルートを伸ばせるかどうか
+		if (!newRoutes.isEmpty()) {
+			for (Route newRoute: newRoutes) {
+				// ルートスタックなどが空でないとき（空の時はプログラムの最初か最後）
+				if (!mRouteQueue.isEmpty()) {
+					for (Route stackedRoute: mRouteQueue) {
+						if (stackedRoute.mToNodeID == newRoute.mToNodeID) {
+							if (stackedRoute.mWeight < newRoute.mWeight) {
+								// 新しいルートのうち、コストが既存のものよりも大きいものは抜き取っておく
+								newRoute.mIsNeeded = false;
+								break;
+							}
+						}
+					}
+				}
+				// ルートスタックが空のとき、全部の新ルートを入れる
+			}
+		}
+		// 新しいルートを追加する
+		// TODO この方法の問題点は、既存のルートで効率の悪いものを消せないということ
+		// ただし、最後の方に移すことは出来る
+		for (Route newRoute : newRoutes) {
+			if (newRoute.mIsNeeded) {	// すでに通っているものは、既存のルートよりもコストが掛かる
+				mRouteQueue.add(newRoute);
+			}
+		}
+		// 調査の結果、そこにいたるルートがないことが分かった
+		if(mRouteQueue.isEmpty() && newRoutes.isEmpty()){
+			// 繋げられない＝呼損のため、呼損したと伝える
+			return new Route(-1, -1, -1, true);
+		}
+		// コスト順に並べる
+		Collections.sort(mRouteQueue, new RouteWeightComparator());
+		// ルートをポップする
+		Route nextRoute = mRouteQueue.remove(0);
+		// ポップされたルートはそのノードへの最小ルートを示している
+		mCostLeastRoutes.add(nextRoute);
+		if (nextRoute.mToNodeID == goalNode.mNodeID){
+			// ゴールに到達した
+			return nextRoute;
+		}
+		return searchRoute(nextRoute, goalNode);
+	}
+
+	/*-----------------------------------------------------*/
+	/** 最短最大路を求める*/
+	public static Route shortestMaxFlowPath() {
+		// 最大路が入っているリスト
+		mMaxFlowRoutes = new ArrayList<Route>();
+		ArrayList<UndirectoryLink> flowOrderedLinks = getFlowOrderedLinks();
+		int linkNum = flowOrderedLinks.size();
+		// ArrayList を切り取る大きさ(sublistで用いる)
+		int trimSize = 1;
+		int startID = mStartNode.mNodeID;
+		UndirectoryLink startLink = new UndirectoryLink(startID, startID, 0);
+		while (true) {
+			if(trimSize > linkNum){	// どのリンクを使ってもグラフを作成出来なかった
+				return new Route(-1, -1, -1, true);
+			}
+			// リンクのコストが次のものと同等のとき、次のリンクも取り入れる
+			if (flowOrderedLinks.get(trimSize - 1).mWeight
+					== flowOrderedLinks.get(trimSize).mWeight) {
+				trimSize++;	// 切り取るサイズを大きくする
+			} else {
+				// 最小ルートを求める
+				makeMaxFlowGraph(
+						new ArrayList<UndirectoryLink>(flowOrderedLinks.subList(0,trimSize)),
+								startLink, new Route(startID, startID, Integer.MAX_VALUE));
+				// 上で上手くグラフが出来なかったら新たにリンクを追加する
+				if (mMaxFlowRoutes.isEmpty()) {
+					trimSize++;
+				} else {
+					break; // グラフを作成出来た
+				}
+			}
+			if (trimSize == linkNum) {	// 全てのリンクが含まれるとき
+				// 最小ルートを求める
+				makeMaxFlowGraph(
+						new ArrayList<UndirectoryLink>(flowOrderedLinks.subList(0,trimSize)),
+								startLink, new Route(startID, startID, Integer.MAX_VALUE));
+				// 上で上手くグラフが出来なかったら新たにリンクを追加する
+				if (mMaxFlowRoutes.isEmpty()) {
+					trimSize++;
+				} else {
+					break;
+				}
+			}
+		}
+		// ルート内のリンク数を比較して、最小のものから並べる
+		Collections.sort(mMaxFlowRoutes, new LinkNumberComparator());
+		return mMaxFlowRoutes.get(0);
+	}
+	/** フロー容量の大きい順に並べたリストを受け取る */
+	public static ArrayList<UndirectoryLink> getFlowOrderedLinks() {
+		ArrayList<UndirectoryLink> flowOrderedLink = new ArrayList<UndirectoryLink>();
+		// 単方向リストだが、全てのリンクを格納する
+		for (Node n : mFlowGraph)
+			for (UndirectoryLink l : n.mLinkList)
+				if (l.mWeight != 0)
+					flowOrderedLink.add(l);
+		Collections.sort(flowOrderedLink, new LinkWeightComparator());
+		return flowOrderedLink;
+	}
+	public static void makeMaxFlowGraph(
+			ArrayList<UndirectoryLink> undirectoryLinks, UndirectoryLink link,
+			Route route) {
+		int startID = link.mToNodeID;
+		int goalID = mGoalNode.mNodeID;
+		if (goalID == startID) { // ゴールにたどり着けたので、ルートを保存
+			mMaxFlowRoutes.add(route.clone());
+		} else { // ゴールではないため、捜索を続ける
+			for (UndirectoryLink l : undirectoryLinks) {
+				if (link.mFromNodeID == l.mToNodeID) { // 一つ前の場所に戻っているので除外
+				} else if (!route.isPassed(l) && startID == l.mFromNodeID) { // 先に進める場合
+					// ルートに今のリンクを追加する
+					route.forwardMaxRoute(l);
+					makeMaxFlowGraph(undirectoryLinks, l, route);
+					// 追加したルートを消す
+					route.backMaxRoute(l);
+				}
+			}
+		}
+	}
+	/*-----------------------------------------------------*/
+	/** ルートのコストを比較するコンパレーター */
+	private static class RouteWeightComparator implements Comparator<Route> {
+		// 正の場合、o1がo2よりも大きいと判断される。つまり、昇順（小さいー＞大きい）
+		@Override
+		public int compare(Route o1, Route o2) {
+			return o1.mWeight - o2.mWeight;
+		}
+	}
+	/** リンクのコストを比較するコンパレーター */
+	private static class LinkWeightComparator implements
+			Comparator<UndirectoryLink> {
+		// 降順（大きいー＞小さい）
+		@Override
+		public int compare(UndirectoryLink o1, UndirectoryLink o2) {
+			return o2.mWeight - o1.mWeight;
+		}
+	}
+	/** ルートのもつリンク数を比較するコンパレーター */
+	private static class LinkNumberComparator implements Comparator<Route> {
+		// 昇順（小さいー＞大きい）
+		@Override
+		public int compare(Route o1, Route o2) {
+			return o1.mLinkList.size() - o2.mLinkList.size();
+		}
 	}
 	
 	/*--------------------ノード変動でテスト------------------------*/
@@ -83,6 +266,7 @@ public class Main {
 										+ "通信した量,呼損率" + NEWLINE;
 		for(int j = 1; j < n; j++){
 			int flowedTime = 0;
+			int linkNum = 0;
 			// 通信の行うルート等を一時的に格納しておく
 			ArrayList<Route> communicatingQueue = new ArrayList<Route>(j);
 			// 最初は通信中のルートを全て呼損したことにする（通信終了処理を行わないため）
@@ -102,6 +286,10 @@ public class Main {
 				}
 				communicatingQueue.add(nextRoute);
 				
+				if(!nextRoute.mIsFlowed){
+					linkNum += nextRoute.mLinkList.size();
+				}
+					
 				// スタートとゴールはランダム
 				int startNodeID = 0, goalNodeID = 0;
 				while (startNodeID == goalNodeID) {
@@ -111,7 +299,8 @@ public class Main {
 				mStartNode = mCostGraph.get(startNodeID);
 				mGoalNode = mCostGraph.get(goalNodeID);
 			}
-			testResultString += j + "," + (((double)flowedTime)/TEST_TIME) + NEWLINE;
+			testResultString += j + "," + (((double)flowedTime)/TEST_TIME) + "," 
+									+ ((double)linkNum)/(TEST_TIME-flowedTime) + NEWLINE;
 			// コストグラフには変化を与えないので、初期値のまま
 			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
@@ -123,6 +312,7 @@ public class Main {
 										+ "通信した量,呼損率" + NEWLINE;
 		for(int j = 1; j < n; j++){
 			int flowedTime = 0;
+			int linkNum = 0;
 			// 通信の行うルート等を一時的に格納しておく
 			ArrayList<Route> communicatingQueue = new ArrayList<Route>(j);
 			// 最初は通信中のルートを全て呼損したことにする（通信終了処理を行わないため）
@@ -149,6 +339,9 @@ public class Main {
 				}
 				communicatingQueue.add(nextRoute);
 				
+				if(!nextRoute.mIsFlowed)
+					linkNum += nextRoute.mLinkList.size();
+				
 				// スタートとゴールノード
 				int startNodeID = 0, goalNodeID = 0;
 				while (startNodeID == goalNodeID) {
@@ -158,7 +351,8 @@ public class Main {
 				mStartNode = mCostGraph.get(startNodeID);
 				mGoalNode = mCostGraph.get(goalNodeID);
 			}
-			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
+			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + ","
+								+ ((double)linkNum)/(TEST_TIME-flowedTime) + NEWLINE;
 			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
 		return testResultString;
@@ -171,6 +365,7 @@ public class Main {
 		Route nextRoute;
 		for(int j = 1; j < n; j++){
 			int flowedTime = 0;
+			int linkNum = 0;
 			// 通信の行うルート等を一時的に格納しておく
 			ArrayList<Route> communicatingQueue = new ArrayList<Route>(j);
 			// 最初は通信中のルートを全て呼損したことにする（通信終了処理を行わないため）
@@ -201,8 +396,12 @@ public class Main {
 					if(nextRoute.mIsFlowed) flowedTime++;
 				}
 				communicatingQueue.add(nextRoute);
+				
+				if(!nextRoute.mIsFlowed)
+					linkNum += nextRoute.mLinkList.size();
 			}
-			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
+			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + ","
+									+ ((double)linkNum)/(TEST_TIME-flowedTime)+ NEWLINE;
 			mCostGraph = getGraphData(COST_GRAPH);
 			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
@@ -216,6 +415,7 @@ public class Main {
 		Route nextRoute;
 		for(int j = 1; j < n; j++){
 			int flowedTime = 0;
+			int linkNum = 0;
 			// 通信の行うルート等を一時的に格納しておく
 			ArrayList<Route> communicatingQueue = new ArrayList<Route>(j);
 			// 最初は通信中のルートを全て呼損したことにする（通信終了処理を行わないため）
@@ -246,8 +446,12 @@ public class Main {
 					if(nextRoute.mIsFlowed) flowedTime++;
 				}
 				communicatingQueue.add(nextRoute);
+				
+				if(!nextRoute.mIsFlowed)
+					linkNum += nextRoute.mLinkList.size();
 			}
-			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + NEWLINE;
+			testResultString += j + "," + ((double)flowedTime)/TEST_TIME + ","
+					+ ((double)linkNum)/(TEST_TIME-flowedTime) + NEWLINE;
 
 			mFlowGraph = getGraphData(FLOW_GRAPH);
 		}
@@ -480,191 +684,14 @@ public class Main {
 			}
 		}
 	}
-	/*-----------------------------------------------------*/
-	/** ダイクストラ法 */
-	public static Route djikstra() {
-		// 初期化がうまくいっていない場合の処理
-		if (mCostGraph == null || mStartNode == null || mGoalNode == null){
-			return null;
-		}
-		mRouteQueue = new ArrayList<Route>();
-		Route startRoute = new Route(mStartNode.mNodeID, mStartNode.mNodeID, 0);
-		// あるノードに対して、コストが最小のルートのみを集めたリスト
-		mCostLeastRoutes = new ArrayList<Route>();
-		return searchRoute(startRoute, mGoalNode);
-	}
-	/**深さ優先探索*/
-	public static Route searchRoute(Route route, Node goalNode) {
-		// 検索するノード
-		Node node = mCostGraph.get(route.mToNodeID);
-		// ノードから派生する新しいルートを保存
-		ArrayList<Route> newRoutes = new ArrayList<Route>();
-		for (UndirectoryLink l : node.mLinkList) {
-			// コストが0でない（つながっている）リンクを元に新しいルートを作成する
-			// また、通ったノードへ戻らないようにする
-			if (!(l.mWeight == 0) && !route.isPassed(l)) {
-				newRoutes.add(route.makeNewRoute(l));
-			}
-		}
-		// ルートを伸ばせるかどうか
-		if (!newRoutes.isEmpty()) {
-			for (Route newRoute: newRoutes) {
-				// ルートスタックなどが空でないとき（空の時はプログラムの最初か最後）
-				if (!mRouteQueue.isEmpty()) {
-					for (Route stackedRoute: mRouteQueue) {
-						if (stackedRoute.mToNodeID == newRoute.mToNodeID) {
-							if (stackedRoute.mWeight < newRoute.mWeight) {
-								// 新しいルートのうち、コストが既存のものよりも大きいものは抜き取っておく
-								newRoute.mIsPassed = true;
-								break;
-							}
-						}
-					}
-				}
-				// ルートスタックが空のとき、全部の新ルートを入れる
-			}
-		}
-		// 新しいルートを追加する
-		// TODO この方法の問題点は、既存のルートで効率の悪いものを消せないということ
-		// ただし、最後の方に移すことは出来る
-		for (Route newRoute : newRoutes) {
-			if (!newRoute.mIsPassed) {	// すでに通っているものは、既存のルートよりもコストが掛かる
-				mRouteQueue.add(newRoute);
-			}
-		}
-		// 調査の結果、そこにいたるルートがないことが分かった
-		if(mRouteQueue.isEmpty() && newRoutes.isEmpty()){
-			// 繋げられない＝呼損のため、呼損したと伝える
-			return new Route(-1, -1, -1, true);
-		}
-		// コスト順に並べる
-		Collections.sort(mRouteQueue, new RouteWeightComparator());
-		// ルートをポップする
-		Route nextRoute = mRouteQueue.remove(0);
-		// ポップされたルートはそのノードへの最小ルートを示している
-		mCostLeastRoutes.add(nextRoute);
-		if (nextRoute.mToNodeID == goalNode.mNodeID){
-			// ゴールに到達した
-			return nextRoute;
-		}
-		return searchRoute(nextRoute, goalNode);
-	}
-
-	/*-----------------------------------------------------*/
-	/** 最短最大路を求める*/
-	public static Route shortestMaxFlowPath() {
-		if (mFlowGraph == null || mStartNode == null || mGoalNode == null)
-			return null;
-		// 最大路が入っているリスト
-		mMaxFlowRoutes = new ArrayList<Route>();
-		ArrayList<UndirectoryLink> flowOrderedLinks = getFlowOrderedLinks();
-		int linkNum = flowOrderedLinks.size();
-		// ArrayList を切り取る大きさ(sublistで用いる)
-		int trimSize = 1;
-		int startID = mStartNode.mNodeID;
-		UndirectoryLink startLink = new UndirectoryLink(startID, startID, 0);
-		while (true) {
-			if(trimSize > linkNum){	// どのリンクを使ってもグラフを作成出来なかった
-				//System.out.print("Sorry, I can't make graph.");
-				return new Route(-1, -1, -1, true);
-			}
-			// リンクのコストが次のものと同等のとき、次のリンクも取り入れる
-			if (flowOrderedLinks.get(trimSize - 1).mWeight
-					== flowOrderedLinks.get(trimSize).mWeight) {
-				trimSize++;	// 切り取るサイズを大きくする
-			} else {
-				// 最小ルートを求める
-				makeMaxFlowGraph(
-						new ArrayList<UndirectoryLink>(flowOrderedLinks.subList(0,trimSize)),
-								startLink, new Route(startID, startID, Integer.MAX_VALUE));
-				// 上で上手くグラフが出来なかったら新たにリンクを追加する
-				if (mMaxFlowRoutes.isEmpty()) {
-					trimSize++;
-				} else {
-					break; // グラフを作成出来た
-				}
-			}
-			if (trimSize == linkNum) {	// 全てのリンクが含まれるとき
-				// 最小ルートを求める
-				makeMaxFlowGraph(
-						new ArrayList<UndirectoryLink>(flowOrderedLinks.subList(0,trimSize)),
-								startLink, new Route(startID, startID, Integer.MAX_VALUE));
-				// 上で上手くグラフが出来なかったら新たにリンクを追加する
-				if (mMaxFlowRoutes.isEmpty()) {
-					trimSize++;
-				} else {
-					break;
-				}
-			}
-		}
-		// ルート内のリンク数を比較して、最小のものから並べる
-		Collections.sort(mMaxFlowRoutes, new LinkNumberComparator());
-		return mMaxFlowRoutes.get(0);
-	}
-	/** フロー容量の大きい順に並べたリストを受け取る */
-	public static ArrayList<UndirectoryLink> getFlowOrderedLinks() {
-		ArrayList<UndirectoryLink> flowOrderedLink = new ArrayList<UndirectoryLink>();
-		// 単方向リストだが、全てのリンクを格納する
-		for (Node n : mFlowGraph)
-			for (UndirectoryLink l : n.mLinkList)
-				if (l.mWeight != 0)
-					flowOrderedLink.add(l);
-		Collections.sort(flowOrderedLink, new LinkWeightComparator());
-		return flowOrderedLink;
-	}
-	public static void makeMaxFlowGraph(
-			ArrayList<UndirectoryLink> undirectoryLinks, UndirectoryLink link,
-			Route route) {
-		int startID = link.mToNodeID;
-		int goalID = mGoalNode.mNodeID;
-		if (goalID == startID) { // ゴールにたどり着けたので、ルートを保存
-			mMaxFlowRoutes.add(route.clone());
-		} else { // ゴールではないため、捜索を続ける
-			for (UndirectoryLink l : undirectoryLinks) {
-				if (link.mFromNodeID == l.mToNodeID) { // 一つ前の場所に戻っているので除外
-				} else if (!route.isPassed(l) && startID == l.mFromNodeID) { // 先に進める場合
-					// ルートに今のリンクを追加する
-					route.forwardMaxRoute(l);
-					makeMaxFlowGraph(undirectoryLinks, l, route);
-					// 追加したルートを消す
-					route.backMaxRoute(l);
-				}
-			}
-		}
-	}
-	/*-----------------------------------------------------*/
-	/** ルートのコストを比較するコンパレーター */
-	private static class RouteWeightComparator implements Comparator<Route> {
-		// 正の場合、o1がo2よりも大きいと判断される。つまり、昇順（小さいー＞大きい）
-		@Override
-		public int compare(Route o1, Route o2) {
-			return o1.mWeight - o2.mWeight;
-		}
-	}
-	/** リンクのコストを比較するコンパレーター */
-	private static class LinkWeightComparator implements
-			Comparator<UndirectoryLink> {
-		// 降順（大きいー＞小さい）
-		@Override
-		public int compare(UndirectoryLink o1, UndirectoryLink o2) {
-			return o2.mWeight - o1.mWeight;
-		}
-	}
-	/** ルートのもつリンク数を比較するコンパレーター */
-	private static class LinkNumberComparator implements Comparator<Route> {
-		// 昇順（小さいー＞大きい）
-		@Override
-		public int compare(Route o1, Route o2) {
-			return o1.mLinkList.size() - o2.mLinkList.size();
-		}
-	}
+	
 	/*--------------------ファイルの入出--------------------------*/
 	
 	/**グラフのデータをcsvから取得する*/
-	public static ArrayList<Node> getGraphData(String fileName) {
+	public static ArrayList<Node> getGraphData(String filePath) {
 		ArrayList<Node> graph = new ArrayList<Node>();
 		// ファイルの選択ダイアログの起動
-		File csvFile = new File("/Users/masudaakira/Documents/" + fileName);
+		File csvFile = new File( filePath);
 		ArrayList<int[]> graphData = getGraphDataFromCsv(csvFile);
 		makeGraphFromGraphData(graph, graphData);
 		return graph;

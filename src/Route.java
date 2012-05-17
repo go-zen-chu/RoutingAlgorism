@@ -3,7 +3,7 @@ import java.util.ArrayList;
 public class Route extends UndirectoryLink implements Cloneable {
 	public ArrayList<UndirectoryLink> mLinkList = null;
 	public boolean mIsFlowed = false;
-	public boolean mIsPassed = false;
+	public boolean mIsNeeded = true;
 	/**調べ終わったIDを保存する.最大最短路で用いる*/
 	private ArrayList<Integer> mCheckedNodeIDs = null;
 	
